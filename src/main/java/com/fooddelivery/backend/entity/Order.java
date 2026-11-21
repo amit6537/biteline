@@ -92,6 +92,21 @@ public class Order {
     @Column(name = "estimated_delivery_at")
     private LocalDateTime estimatedDeliveryAt;
 
+    // Phase 12: when the ETA was last recalculated (throttles GPS-driven updates)
+    @Column(name = "eta_updated_at")
+    private LocalDateTime etaUpdatedAt;
+
+    // Phase 12: snapshot of the drop location (null if the address had no coordinates)
+    @Column(name = "delivery_lat")
+    private Double deliveryLat;
+
+    @Column(name = "delivery_lng")
+    private Double deliveryLng;
+
+    // Ops alert "nobody is delivering this order" already sent? (send once)
+    @Column(name = "assignment_alerted_at")
+    private LocalDateTime assignmentAlertedAt;
+
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
@@ -99,6 +114,7 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude // Order <-> OrderItem point at each other; including both would recurse forever
     private List<OrderItem> items = new ArrayList<>();
 }
 

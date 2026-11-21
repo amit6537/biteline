@@ -42,6 +42,12 @@ public class OrderController {
     /**
      * Get specific order details (Authorized customer, restaurant owner, delivery partner, or admin).
      */
+    /** Phase 12: live tracking (status, ETA, rider on the map). */
+    @GetMapping("/{id}/tracking")
+    public ResponseEntity<com.fooddelivery.backend.dto.response.TrackingResponse> tracking(@PathVariable UUID id) {
+        return ResponseEntity.ok(orderService.getTracking(id));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<OrderResponse> getOrderById(@PathVariable UUID id) {
         return ResponseEntity.ok(orderService.getOrderById(id));

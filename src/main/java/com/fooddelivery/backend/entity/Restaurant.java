@@ -59,13 +59,28 @@ public class Restaurant {
     @Column(name = "image_url")
     private String imageUrl;
 
-    @Column(name = "avg_rating", nullable = false)
+    // ── Rating aggregates (Phase 11) ─────────────────────────
+    // insertable/updatable = false: JPA NEVER writes these columns.
+    // They change only through one atomic SQL UPDATE in RestaurantRepository.
+    // WHY? An owner editing the restaurant name loads the row, then saves ALL
+    // columns. If a review landed in between, that save would overwrite the
+    // new rating with the old one (a "lost update").
+    @Column(name = "avg_rating", nullable = false, insertable = false, updatable = false)
     @Builder.Default
     private Double avgRating = 0.0;
 
-    @Column(name = "total_reviews", nullable = false)
+    @Column(name = "total_reviews", nullable = false, insertable = false, updatable = false)
     @Builder.Default
     private Integer totalReviews = 0;
+
+    @Column(name = "rating_sum", nullable = false, insertable = false, updatable = false)
+    @Builder.Default
+    private Long ratingSum = 0L;
+
+    // Phase 12: typical kitchen time, used for ETA
+    @Column(name = "avg_prep_minutes", nullable = false)
+    @Builder.Default
+    private Integer avgPrepMinutes = 20;
 
     @Column(name = "is_open", nullable = false)
     @Builder.Default

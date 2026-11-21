@@ -14,8 +14,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # auto-run schema.sql on first startup
-      - ./src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      # Schema is created by Flyway when the app starts
+      # (src/main/resources/db/migration), not by a Docker init script.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fduser -d fooddelivery"]
       interval: 10s
@@ -90,6 +90,18 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: food-delivery
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  # ─────────────────────────────────────────
+  # Mailpit — fake SMTP server for local dev.
+  # The app sends real emails to it; open http://localhost:8025 to read them.
+  # Nothing ever leaves your machine.
+  # ─────────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    container_name: fd-mailpit
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web inbox + API
 
 volumes:
   pgdata:

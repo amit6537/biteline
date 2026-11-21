@@ -81,6 +81,20 @@ public class RestaurantController {
      * GET /api/restaurants/search?city=Mumbai&name=pizza&openOnly=true
      * Search restaurants by name within a city.
      */
+    /**
+     * Phase 12: GET /api/restaurants/nearby?lat=19.07&lng=72.87&radiusKm=5
+     * (A fixed path like "/nearby" wins over "/{id}", so no clash.)
+     */
+    @GetMapping("/nearby")
+    public ResponseEntity<List<com.fooddelivery.backend.dto.response.NearbyRestaurantResponse>> nearby(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "5") double radiusKm,
+            @RequestParam(defaultValue = "true") boolean openOnly,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(restaurantService.findNearby(lat, lng, radiusKm, openOnly, limit));
+    }
+
     @GetMapping("/search")
     public ResponseEntity<Page<RestaurantResponse>> searchRestaurants(
             @RequestParam String city,

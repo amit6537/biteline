@@ -41,5 +41,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     // SELECT COUNT(*) > 0 FROM users WHERE phone = ?
     boolean existsByPhone(String phone);
+
+    // All active users with a role — e.g. every ADMIN for ops alerts
+    java.util.List<User> findByRoleAndIsActiveTrue(com.fooddelivery.backend.entity.Role role);
 }
 
