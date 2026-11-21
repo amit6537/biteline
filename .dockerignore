@@ -1,0 +1,13 @@
+# Keep the Docker build context small and free of secrets/junk.
+# (Everything listed here is NOT sent to `docker build`.)
+target/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+graphify-out/
+HELP.md
+**/*.log
+.env
+.env.*

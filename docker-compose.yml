@@ -1,4 +1,62 @@
+# ─────────────────────────────────────────────────────────────
+# Two ways to use this file:
+#
+#   docker compose up -d
+#       → only the infrastructure (Postgres, Redis, Kafka, Mailpit).
+#         You run the app yourself from the IDE / ./mvnw spring-boot:run.
+#
+#   docker compose --profile app up -d --build
+#       → infrastructure + the app itself in a container (port 8080).
+#         The "app" profile keeps it OFF by default so it never clashes
+#         with the app you run from your IDE on the same port.
+# ─────────────────────────────────────────────────────────────
 services:
+
+  # ─────────────────────────────────────────
+  # The Spring Boot app (built from ./Dockerfile)
+  # ─────────────────────────────────────────
+  app:
+    build: .
+    image: food-delivery-backend:local
+    container_name: fd-app
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      # Inside Docker, services reach each other by NAME, not localhost
+      DB_URL: jdbc:postgresql://postgres:5432/fooddelivery
+      DB_USERNAME: fduser
+      DB_PASSWORD: fdpass
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092   # the in-network Kafka listener
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      # Override these for anything beyond local testing:
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
 
   # ─────────────────────────────────────────
   # PostgreSQL — primary database
