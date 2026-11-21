@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 public class RefreshTokenCleanupScheduler {
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final com.fooddelivery.backend.repository.PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Scheduled(cron = "${app.auth.refresh-token-cleanup-cron:0 30 3 * * *}")
     @SchedulerLock(name = "refreshTokenCleanup", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
@@ -30,6 +31,11 @@ public class RefreshTokenCleanupScheduler {
         int deleted = refreshTokenRepository.deleteExpired(LocalDateTime.now());
         if (deleted > 0) {
             log.info("[SCHEDULER] Deleted {} expired refresh tokens", deleted);
+        }
+        // expired "forgot password" links are useless too
+        int resets = passwordResetTokenRepository.deleteExpired(LocalDateTime.now());
+        if (resets > 0) {
+            log.info("[SCHEDULER] Deleted {} expired password reset tokens", resets);
         }
     }
 }

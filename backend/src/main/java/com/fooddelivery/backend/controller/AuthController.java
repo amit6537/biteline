@@ -1,10 +1,13 @@
 package com.fooddelivery.backend.controller;
 
+import com.fooddelivery.backend.dto.request.ForgotPasswordRequest;
 import com.fooddelivery.backend.dto.request.LoginRequest;
 import com.fooddelivery.backend.dto.request.RefreshTokenRequest;
 import com.fooddelivery.backend.dto.request.RegisterRequest;
+import com.fooddelivery.backend.dto.request.ResetPasswordRequest;
 import com.fooddelivery.backend.dto.response.AuthResponse;
 import com.fooddelivery.backend.service.AuthService;
+import com.fooddelivery.backend.service.PasswordResetService;
 import com.fooddelivery.backend.util.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -15,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 /**
  * AuthController — HTTP layer for authentication endpoints.
@@ -53,6 +58,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
     private final SecurityUtils securityUtils;
 
     /**
@@ -98,6 +104,30 @@ public class AuthController {
     public ResponseEntity<Void> logout(
             @Valid @RequestBody RefreshTokenRequest request) {
         authService.logout(request.getRefreshToken());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /api/auth/forgot-password — body {"email": "..."}
+     * Emails a reset link if the account exists. Always 202 with the same
+     * message, so this can't be used to find out who has an account.
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request.getEmail());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("message",
+                "If an account exists for that email, we've sent a link to reset the password."));
+    }
+
+    /**
+     * POST /api/auth/reset-password — body {"token": "...", "newPassword": "..."}
+     * 204 on success; every device is logged out, so the user logs in again.
+     */
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
         return ResponseEntity.noContent().build();
     }
 

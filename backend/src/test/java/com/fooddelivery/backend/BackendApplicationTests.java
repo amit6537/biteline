@@ -18,6 +18,6 @@ class BackendApplicationTests extends AbstractIntegrationTest {
 
         Integer latest = jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS INT)) FROM flyway_schema_history WHERE success", Integer.class);
-        assertThat(latest).isEqualTo(8);
+        assertThat(latest).isEqualTo(9); // V9 = password_reset_tokens
     }
 }

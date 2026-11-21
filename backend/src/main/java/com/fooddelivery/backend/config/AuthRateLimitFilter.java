@@ -30,7 +30,8 @@ import java.util.Set;
 public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     private static final Set<String> LIMITED_PATHS =
-            Set.of("/api/auth/login", "/api/auth/register", "/api/auth/refresh");
+            Set.of("/api/auth/login", "/api/auth/register", "/api/auth/refresh",
+                    "/api/auth/forgot-password", "/api/auth/reset-password");
 
     private final RateLimiter rateLimiter;
     private final RateLimitProperties props;
@@ -40,7 +41,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         this.props = props;
     }
 
-    /** Only POSTs to the three auth endpoints (OPTIONS preflights are never counted). */
+    /** Only POSTs to the public auth endpoints (OPTIONS preflights are never counted). */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !props.isEnabled()

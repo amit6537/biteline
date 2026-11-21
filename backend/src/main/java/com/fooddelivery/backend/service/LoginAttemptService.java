@@ -65,6 +65,14 @@ public class LoginAttemptService {
         }
     }
 
+    /** Password was reset by the account owner → forget ALL failures on that account. */
+    public void clearAccount(String email) {
+        if (props.isEnabled()) {
+            rateLimiter.reset(accountKey(email));
+        }
+        // the per-IP counters expire on their own within 15 min
+    }
+
     // "Amit@X.com" and "amit@x.com" must share one counter
     private static String normalize(String email) {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
