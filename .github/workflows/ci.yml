@@ -32,10 +32,10 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -50,11 +50,25 @@ jobs:
           wait
 
       - name: Build and run all tests
-        run: ./mvnw -B -ntp verify
+        # tee keeps a copy of the log so the next step can quote it
+        run: |
+          set -o pipefail
+          ./mvnw -B -ntp verify 2>&1 | tee build.log
+
+      - name: Show why it failed (on failure)
+        # Turns the key error lines into a GitHub annotation, visible right
+        # on the run's summary page without digging through the full log.
+        if: failure()
+        run: |
+          lines=$(grep -E '\[ERROR\]|Tests run:.*(Failures: [1-9]|Errors: [1-9])|Caused by|Exception' build.log \
+                  | grep -v 'Re-run Maven' | head -n 40)
+          [ -z "$lines" ] && lines=$(tail -n 40 build.log)
+          msg=$(printf '%s' "$lines" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Build/test failure::${msg}"
 
       - name: Upload test reports (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: surefire-reports
           path: target/surefire-reports/
@@ -68,7 +82,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build image
         run: docker build -t food-delivery-backend:ci .
