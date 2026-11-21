@@ -69,7 +69,7 @@ public abstract class AbstractIntegrationTest {
     }
 
     @Value("${local.server.port}")
-    private int port;
+    protected int port;
 
     @Autowired protected JdbcTemplate jdbc;            // peek/poke the DB directly
     @Autowired protected StringRedisTemplate redis;    // peek into Redis

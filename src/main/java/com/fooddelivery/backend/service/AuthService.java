@@ -12,6 +12,7 @@ import com.fooddelivery.backend.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
+    private final LoginAttemptService loginAttemptService;
 
     /**
      * Register a new user.
@@ -104,19 +107,28 @@ public class AuthService {
     /**
      * Login an existing user.
      */
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String clientIp) {
+        // Locked after too many wrong passwords? → 429, password not even checked
+        loginAttemptService.checkAllowed(request.getEmail(), clientIp);
+
         // AuthenticationManager.authenticate() does two things:
         //   1. Calls UserDetailsService.loadUserByUsername(email) to load the user
         //   2. Compares submitted password with stored BCrypt hash
         //
         // If credentials are wrong → BadCredentialsException (→ 401)
         // If user is disabled    → DisabledException (→ 401)
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException e) {
+            loginAttemptService.recordFailure(request.getEmail(), clientIp);
+            throw e; // still a normal 401 for the caller
+        }
+        loginAttemptService.recordSuccess(request.getEmail(), clientIp);
 
         // If we reach here, credentials are valid — load user to build response
         User user = userRepository.findByEmail(request.getEmail())
@@ -127,12 +139,36 @@ public class AuthService {
     }
 
     /**
-     * Shared helper — generates tokens and builds the response DTO.
+     * Exchange a refresh token for a new access token + a new refresh token.
+     * The old refresh token stops working (rotation, see RefreshTokenService).
      */
+    public AuthResponse refresh(String refreshToken) {
+        RefreshTokenService.Rotation rotation = refreshTokenService.rotate(refreshToken);
+        return buildAuthResponse(rotation.user(), rotation.refreshToken());
+    }
+
+    /** Log out this device: its refresh token (and the tokens before it) stop working. */
+    public void logout(String refreshToken) {
+        refreshTokenService.logout(refreshToken);
+    }
+
+    /** Log out every device of the current user. */
+    public void logoutAll(User user) {
+        int revoked = refreshTokenService.logoutAll(user.getId());
+        log.info("User {} logged out everywhere ({} session token(s) revoked)", user.getEmail(), revoked);
+    }
+
+    /** Login / register: a brand-new session. */
     private AuthResponse buildAuthResponse(User user) {
+        return buildAuthResponse(user, refreshTokenService.issueForNewLogin(user));
+    }
+
+    /**
+     * Shared helper — generates the access token and builds the response DTO.
+     */
+    private AuthResponse buildAuthResponse(User user, String refreshToken) {
         String accessToken = jwtUtil.generateAccessToken(
                 user.getEmail(), user.getRole().name());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
         return AuthResponse.builder()
                 .accessToken(accessToken)

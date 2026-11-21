@@ -1,6 +1,7 @@
 package com.fooddelivery.backend.config;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,7 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,9 +21,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * SecurityConfig — the master configuration for Spring Security.
@@ -81,13 +88,21 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 // Disable CSRF — not needed for stateless JWT APIs
+                // (the token travels in a header, which other sites can't make a browser send)
                 .csrf(csrf -> csrf.disable())
+
+                // CORS — let OUR frontend (another origin, e.g. localhost:5173)
+                // call this API from the browser. Rules: corsConfigurationSource() below.
+                .cors(Customizer.withDefaults())
 
                 // Authorization rules — evaluated top to bottom, first match wins
                 .authorizeHttpRequests(auth -> auth
+                        // Logging out every device needs to know WHO you are
+                        // (must come before the /api/auth/** permitAll below)
+                        .requestMatchers("/api/auth/logout-all").authenticated()
                         // Public endpoints — no token required
                         .requestMatchers(
-                                "/api/auth/**", // register, login, refresh
+                                "/api/auth/**", // register, login, refresh, logout
                                 "/actuator/health", "/actuator/info"
                         ).permitAll()
                         // Browsing restaurants & menus is public — but ONLY reads.
@@ -118,6 +133,39 @@ public class SecurityConfig {
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 
                 .build();
+    }
+
+    /**
+     * CONCEPT: CORS (Cross-Origin Resource Sharing)
+     * ─────────────────────────────────────────────
+     * A browser only lets JavaScript from https://a.com read responses from
+     * https://b.com if b.com says so in "Access-Control-Allow-*" headers.
+     * Before a POST with JSON or an Authorization header, the browser first
+     * sends an OPTIONS "preflight" request to ask. Spring answers it here.
+     *
+     * Only origins listed in app.cors.allowed-origins get those headers.
+     * Postman / curl / other servers don't care about CORS — it protects
+     * the user's BROWSER from other websites, it is not authentication.
+     *
+     * allowCredentials=false: we send the JWT in the Authorization header,
+     * not in cookies, so the browser doesn't need to attach cookies.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins}") String allowedOrigins) {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L); // browser may cache the preflight answer for 1 hour
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     /** Writes the same JSON error shape GlobalExceptionHandler uses. */

@@ -10,6 +10,7 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 /**
@@ -73,12 +74,23 @@ public class JwtUtil {
 
     /**
      * Generate a long-lived refresh token.
-     * Minimal claims — just enough to identify the user.
+     * Minimal claims: who it belongs to, plus a unique id ("jti") that
+     * points at its row in the refresh_tokens table, so we can revoke it.
      */
-    public String generateRefreshToken(String email) {
+    public String generateRefreshToken(String email, UUID tokenId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("type", "refresh");
+        claims.put("jti", tokenId.toString());
         return buildToken(claims, email, refreshTokenExpiryMs);
+    }
+
+    /** Reads and verifies a token (signature + expiry), throwing JwtException if bad. */
+    public Claims parse(String token) {
+        return extractAllClaims(token);
+    }
+
+    public long getRefreshTokenExpiryMs() {
+        return refreshTokenExpiryMs;
     }
 
     private String buildToken(Map<String, Object> extraClaims, String subject, long expiry) {

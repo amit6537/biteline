@@ -7,6 +7,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -41,8 +43,16 @@ class JwtUtilTest {
     @Test
     void refreshTokenIsNotAnAccessToken() {
         // The security fix: a 7-day refresh token must not work as a login token
-        String refresh = jwt.generateRefreshToken("a@b.com");
+        String refresh = jwt.generateRefreshToken("a@b.com", UUID.randomUUID());
         assertThat(jwt.isAccessToken(refresh)).isFalse();
+    }
+
+    @Test
+    void refreshTokenCarriesItsDatabaseId() {
+        UUID id = UUID.randomUUID();
+        var claims = jwt.parse(jwt.generateRefreshToken("a@b.com", id));
+        assertThat(claims.getId()).isEqualTo(id.toString());
+        assertThat(claims.get("type", String.class)).isEqualTo("refresh");
     }
 
     @Test
