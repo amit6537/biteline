@@ -107,5 +107,45 @@ public class OrderEvents {
             UUID partnerId,
             LocalDateTime deliveredAt
     ) {}
-}
 
+    /**
+     * Published when a delivery partner is assigned to an order (Phase 8).
+     * Consumed by: NotificationConsumer → "Rahul is picking up your order".
+     */
+    /**
+     * An order has been READY for too long and no partner took it.
+     * Consumed by: NotificationConsumer → customer ("slight delay") + all admins.
+     */
+    public record DeliveryDelayedEvent(
+            UUID orderId,
+            UUID customerId,
+            UUID restaurantId,
+            String restaurantName,
+            long waitingMinutes,
+            LocalDateTime detectedAt
+    ) {}
+
+    /**
+     * A customer reviewed an order (Phase 11).
+     * Consumed by: NotificationConsumer → restaurant owner (+ partner if rated).
+     */
+    public record ReviewCreatedEvent(
+            UUID reviewId,
+            UUID orderId,
+            UUID restaurantId,
+            UUID partnerId,
+            int foodRating,
+            Integer deliveryRating,
+            LocalDateTime createdAt
+    ) {}
+
+    public record DeliveryAssignedEvent(
+            UUID assignmentId,
+            UUID orderId,
+            UUID customerId,
+            String customerEmail,
+            UUID partnerId,
+            String partnerName,
+            LocalDateTime assignedAt
+    ) {}
+}
