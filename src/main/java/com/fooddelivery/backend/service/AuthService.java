@@ -4,6 +4,8 @@ import com.fooddelivery.backend.dto.request.LoginRequest;
 import com.fooddelivery.backend.dto.request.RegisterRequest;
 import com.fooddelivery.backend.dto.response.AuthResponse;
 import com.fooddelivery.backend.entity.User;
+import com.fooddelivery.backend.entity.Role;
+import com.fooddelivery.backend.exception.BadRequestException;
 import com.fooddelivery.backend.exception.ConflictException;
 import com.fooddelivery.backend.repository.UserRepository;
 import com.fooddelivery.backend.util.JwtUtil;
@@ -58,6 +60,14 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        // 0. SECURITY: nobody may self-register as ADMIN.
+        //    Without this check, anyone could POST {"role":"ADMIN"} and get
+        //    full access. Admins are created directly in the database.
+        Role role = request.getRole() == null ? Role.CUSTOMER : request.getRole();
+        if (role == Role.ADMIN) {
+            throw new BadRequestException("Cannot self-register with role ADMIN");
+        }
+
         // 1. Check for duplicate email or phone
         //    WHY check before saving?
         //    The DB has a UNIQUE constraint too, but we check here first
@@ -81,7 +91,7 @@ public class AuthService {
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .passwordHash(hashedPassword)
-                .role(request.getRole())
+                .role(role)
                 .build();
 
         User savedUser = userRepository.save(user);

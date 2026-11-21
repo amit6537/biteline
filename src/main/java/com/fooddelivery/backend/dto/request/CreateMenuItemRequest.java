@@ -1,5 +1,6 @@
 package com.fooddelivery.backend.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -23,6 +24,7 @@ public class CreateMenuItemRequest {
 
     private String imageUrl;
 
+    @JsonProperty("isVegetarian") // keep the "is" prefix in JSON (Lombok would drop it)
     private boolean isVegetarian = false;
 }
 

@@ -4,6 +4,7 @@ import com.fooddelivery.backend.dto.request.ProcessPaymentRequest;
 import com.fooddelivery.backend.dto.response.PaymentResponse;
 import com.fooddelivery.backend.entity.*;
 import com.fooddelivery.backend.exception.BadRequestException;
+import com.fooddelivery.backend.exception.ConflictException;
 import com.fooddelivery.backend.exception.ForbiddenException;
 import com.fooddelivery.backend.exception.ResourceNotFoundException;
 import com.fooddelivery.backend.kafka.OrderEventProducer;
@@ -37,21 +38,32 @@ public class PaymentService {
     public PaymentResponse processPayment(ProcessPaymentRequest request) {
         User user = securityUtils.getCurrentUser();
 
-        // 1. Idempotency Check
-        if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
-            Optional<Payment> existingOpt = paymentRepository.findByIdempotencyKey(request.getIdempotencyKey());
-            if (existingOpt.isPresent()) {
-                log.info("Idempotent replay detected for key: {}", request.getIdempotencyKey());
-                return toPaymentResponse(existingOpt.get());
-            }
-        }
+        String idemKey = (request.getIdempotencyKey() == null || request.getIdempotencyKey().isBlank())
+                ? null : request.getIdempotencyKey();
 
-        // 2. Order validation
-        Order order = orderRepository.findById(request.getOrderId())
+        // 1. Lock the order row. Two payment requests for the same order
+        //    (double-click, network retry) now run one at a time, so the
+        //    second one always sees the first one's payment.
+        Order order = orderRepository.findByIdForUpdate(request.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + request.getOrderId()));
 
         if (!order.getCustomer().getId().equals(user.getId())) {
             throw new ForbiddenException("You cannot pay for an order that does not belong to you.");
+        }
+
+        // 2. Idempotency check (after the lock, so concurrent retries are safe).
+        //    A key is only a valid "replay" for the SAME order — otherwise a
+        //    user could send someone else's key and read their payment.
+        if (idemKey != null) {
+            Optional<Payment> existingOpt = paymentRepository.findByIdempotencyKey(idemKey);
+            if (existingOpt.isPresent()) {
+                Payment existing = existingOpt.get();
+                if (!existing.getOrder().getId().equals(order.getId())) {
+                    throw new ConflictException("Idempotency key was already used for a different request.");
+                }
+                log.info("Idempotent replay detected for key: {}", idemKey);
+                return toPaymentResponse(existing);
+            }
         }
 
         if (order.getStatus() == OrderStatus.CANCELLED) {
@@ -71,7 +83,7 @@ public class PaymentService {
                 .build());
 
         payment.setMethod(request.getMethod());
-        payment.setIdempotencyKey(request.getIdempotencyKey());
+        payment.setIdempotencyKey(idemKey);
 
         // 4. Simulate payment processing
         // (In real life: Call Stripe/Razorpay SDK or generate payment gateway URL)

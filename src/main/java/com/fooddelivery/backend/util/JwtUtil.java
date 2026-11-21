@@ -103,6 +103,14 @@ public class JwtUtil {
         return email.equals(expectedEmail) && !isTokenExpired(token);
     }
 
+    /**
+     * True only for ACCESS tokens. A refresh token lives 7 days and must
+     * only be usable to get a new access token — never to call the API.
+     */
+    public boolean isAccessToken(String token) {
+        return "access".equals(extractAllClaims(token).get("type", String.class));
+    }
+
     public boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }

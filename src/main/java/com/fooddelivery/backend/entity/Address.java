@@ -53,10 +53,12 @@ public class Address {
     @Column(nullable = false, length = 10)
     private String pincode;
 
-    @Column(precision = 9, scale = 6)
+    // Plain Double: Hibernate 7 rejects precision/scale on floating-point columns
+    // (the DB column itself is still DECIMAL(9,6) — see schema.sql).
+    @Column(name = "latitude")
     private Double latitude;
 
-    @Column(precision = 9, scale = 6)
+    @Column(name = "longitude")
     private Double longitude;
 
     @Column(name = "is_default", nullable = false)

@@ -31,6 +31,7 @@ public class OrderItem {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude // Order <-> OrderItem point at each other; including both would recurse forever
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)

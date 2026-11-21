@@ -93,8 +93,12 @@ public class JwtFilter extends OncePerRequestFilter {
                 // 6. Load user from DB — also checks if user is active
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                // 7. Validate token (signature + expiry + email match)
-                if (jwtUtil.isTokenValid(jwt, userDetails.getUsername())) {
+                // 7. Validate token (signature + expiry + email match),
+                //    require an ACCESS token (refresh tokens are rejected),
+                //    and require the account to still be active.
+                if (jwtUtil.isTokenValid(jwt, userDetails.getUsername())
+                        && jwtUtil.isAccessToken(jwt)
+                        && userDetails.isEnabled()) {
 
                     // 8. Build Spring Security's Authentication object
                     UsernamePasswordAuthenticationToken authToken =
@@ -120,6 +124,9 @@ public class JwtFilter extends OncePerRequestFilter {
             // A public endpoint should still work with an expired token (just unauthed).
         } catch (JwtException e) {
             log.debug("Invalid JWT token: {}", e.getMessage());
+        } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+            // Token is validly signed but the user was deleted → treat as anonymous
+            log.debug("JWT user no longer exists: {}", e.getMessage());
         }
 
         // 11. Always continue the filter chain

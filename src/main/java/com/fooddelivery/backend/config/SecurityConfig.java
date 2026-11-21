@@ -1,6 +1,10 @@
 package com.fooddelivery.backend.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -15,6 +19,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
 
 /**
  * SecurityConfig — the master configuration for Spring Security.
@@ -81,14 +88,24 @@ public class SecurityConfig {
                         // Public endpoints — no token required
                         .requestMatchers(
                                 "/api/auth/**", // register, login, refresh
-                                "/api/restaurants/**", // browse restaurants (read-only)
-                                "/actuator/**" // health checks
+                                "/actuator/health", "/actuator/info"
                         ).permitAll()
+                        // Browsing restaurants & menus is public — but ONLY reads.
+                        // POST/PATCH/DELETE on restaurants still need a token.
+                        .requestMatchers(HttpMethod.GET, "/api/restaurants/**").permitAll()
                         // Everything else requires a valid JWT
                         .anyRequest().authenticated())
 
                 // STATELESS — no HTTP sessions, every request must carry a JWT
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // No token / bad token → 401, valid token but wrong role → 403.
+                // (Spring's default would answer 403 for both.)
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((req, res, e) ->
+                                writeError(res, HttpStatus.UNAUTHORIZED, "Authentication required"))
+                        .accessDeniedHandler((req, res, e) ->
+                                writeError(res, HttpStatus.FORBIDDEN, "Access denied")))
 
                 // Wire our AuthenticationProvider (DB + BCrypt)
                 .authenticationProvider(authenticationProvider())
@@ -101,6 +118,15 @@ public class SecurityConfig {
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 
                 .build();
+    }
+
+    /** Writes the same JSON error shape GlobalExceptionHandler uses. */
+    static void writeError(HttpServletResponse res, HttpStatus status, String message) throws IOException {
+        res.setStatus(status.value());
+        res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        res.getWriter().write(String.format(
+                "{\"timestamp\":\"%s\",\"status\":%d,\"error\":\"%s\",\"message\":\"%s\"}",
+                LocalDateTime.now(), status.value(), status.getReasonPhrase(), message));
     }
 
     /**

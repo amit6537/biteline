@@ -1,10 +1,12 @@
 package com.fooddelivery.backend.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +15,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,18 +49,24 @@ public class KafkaConfig {
     public static final String TOPIC_ORDER_STATUS_CHANGED = "order.status.changed";
     public static final String TOPIC_ORDER_READY          = "order.ready";
     public static final String TOPIC_ORDER_DELIVERED      = "order.delivered";
+    public static final String TOPIC_DELIVERY_ASSIGNED    = "delivery.assigned";
+    public static final String TOPIC_DELIVERY_DELAYED     = "delivery.delayed";
+    public static final String TOPIC_REVIEW_CREATED       = "review.created";
 
     @Bean public NewTopic orderPlacedTopic()         { return new NewTopic(TOPIC_ORDER_PLACED, 3, (short) 1); }
     @Bean public NewTopic paymentSuccessTopic()      { return new NewTopic(TOPIC_PAYMENT_SUCCESS, 3, (short) 1); }
     @Bean public NewTopic orderStatusChangedTopic()  { return new NewTopic(TOPIC_ORDER_STATUS_CHANGED, 3, (short) 1); }
     @Bean public NewTopic orderReadyTopic()          { return new NewTopic(TOPIC_ORDER_READY, 3, (short) 1); }
     @Bean public NewTopic orderDeliveredTopic()      { return new NewTopic(TOPIC_ORDER_DELIVERED, 3, (short) 1); }
+    @Bean public NewTopic deliveryAssignedTopic()    { return new NewTopic(TOPIC_DELIVERY_ASSIGNED, 3, (short) 1); }
+    @Bean public NewTopic deliveryDelayedTopic()     { return new NewTopic(TOPIC_DELIVERY_DELAYED, 3, (short) 1); }
+    @Bean public NewTopic reviewCreatedTopic()       { return new NewTopic(TOPIC_REVIEW_CREATED, 3, (short) 1); }
 
     // ── Jackson ObjectMapper ──────────────────────────────────
     @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return mapper;
     }
@@ -95,6 +106,33 @@ public class KafkaConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(3);
+        factory.setCommonErrorHandler(kafkaErrorHandler());
         return factory;
+    }
+
+    /**
+     * CONCEPT: Retry + Dead Letter Topic (DLT)
+     * ─────────────────────────────────────────
+     * Before: every consumer wrapped its body in try/catch and just logged —
+     * a failed message was silently lost forever.
+     *
+     * Now consumers let exceptions escape, and this handler:
+     *   1. retries the message 3 times, 1 second apart (fixes temporary
+     *      problems like a DB hiccup);
+     *   2. if it still fails, copies it to "<topic>.DLT" (e.g. order.ready.DLT)
+     *      so nothing is lost and a developer can inspect/replay it later;
+     *   3. skips retries for malformed JSON — retrying can't fix that.
+     *
+     * partition -1 = let Kafka pick the DLT partition (the DLT may have fewer
+     * partitions than the original topic).
+     */
+    @Bean
+    public DefaultErrorHandler kafkaErrorHandler() {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                kafkaTemplate(),
+                (record, ex) -> new TopicPartition(record.topic() + ".DLT", -1));
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
+        handler.addNotRetryableExceptions(JsonProcessingException.class);
+        return handler;
     }
 }

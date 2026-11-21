@@ -1,7 +1,18 @@
 package com.fooddelivery.backend.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -98,6 +109,72 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<Map<String, Object>> handleDisabled(DisabledException ex) {
         return buildResponse(HttpStatus.UNAUTHORIZED, "Account is disabled", null);
+    }
+
+    /**
+     * @PreAuthorize("hasRole(...)") failures land here (they are thrown inside
+     * the controller, so without this they'd hit the catch-all and become 500).
+     * Not logged in → 401. Logged in with the wrong role → 403.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth instanceof AnonymousAuthenticationToken) {
+            return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication required", null);
+        }
+        return buildResponse(HttpStatus.FORBIDDEN, "You do not have permission to do this", null);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException ex) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication failed", null);
+    }
+
+    // ── Bad client input (400) ────────────────────────────────
+
+    /** Body is not valid JSON, or a value has the wrong type (e.g. unknown enum). */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Malformed request body", null);
+    }
+
+    /** e.g. GET /api/orders/not-a-uuid, or ?status=FOO */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST,
+                "Invalid value for parameter '" + ex.getName() + "'", null);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParam(MissingServletRequestParameterException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST,
+                "Missing required parameter '" + ex.getParameterName() + "'", null);
+    }
+
+    // ── 404 / 405 for unknown routes and wrong HTTP methods ───
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoRoute(NoResourceFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Endpoint not found", null);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMethod(HttpRequestMethodNotSupportedException ex) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, ex.getMessage(), null);
+    }
+
+    // ── Database constraint violations (409) ──────────────────
+
+    /**
+     * A UNIQUE or FOREIGN KEY constraint said no — e.g. deleting an address
+     * that past orders still point to, or two requests racing to insert the
+     * same row. That's a conflict with existing data, not a server crash.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        return buildResponse(HttpStatus.CONFLICT,
+                "This operation conflicts with existing data (it may be in use or already exist)", null);
     }
 
     // ── Catch-all (500) ───────────────────────────────────────
