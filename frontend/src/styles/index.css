@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   Design tokens (from /home/amit/projects/DESIGN.md — Airbnb-style light theme) — the ONLY place colours, radii and type live.
+   Tailwind turns each token into classes:
+     --color-fg      → text-fg / bg-fg / border-fg
+     --radius-md     → rounded-md
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  /* Inter = the open substitute DESIGN.md names for Airbnb Cereal */
+  --font-sans: "Inter", -apple-system, system-ui, Roboto, "Helvetica Neue", sans-serif;
+
+  /* Brand — the ONE accent colour. Primary CTAs, search orb, badges. Use sparingly. */
+  --color-primary: #ff385c;
+  --color-primary-active: #e00b41;
+  --color-primary-disabled: #ffd1da;
+
+  /* Text */
+  --color-fg: #222222;        /* ink: headlines, body, stars (never pure black) */
+  --color-body: #3f3f3f;      /* long running text */
+  --color-muted: #6a6a6a;     /* sub-labels, meta lines */
+  --color-subtle: #929292;    /* placeholders, disabled */
+
+  /* Surfaces — a white canvas; depth comes from photos + hairlines, not fills */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f7f7; /* soft: hover rows, disabled fields */
+  --color-surface-3: #f2f2f2; /* strong: circular icon buttons, tracks */
+  --color-line: #dddddd;      /* hairline */
+  --color-line-strong: #c1c1c1;
+
+  /* Status — tuned to read on white */
+  --color-success: #008a05;
+  --color-warning: #b45309;
+  --color-danger: #c13515;    /* DESIGN.md error red, distinct from the brand */
+  --color-info: #1f6feb;
+  --color-veg: #008a05;
+  --color-nonveg: #c13515;
+
+  /* Radii from DESIGN.md: buttons 8, cards 14, panels 20, pills full */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+
+  /* The single elevation tier: hover-floated cards, search bar, menus */
+  --shadow-card: rgba(0, 0, 0, 0.02) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 6px 0, rgba(0, 0, 0, 0.1) 0 4px 8px 0;
+  --shadow-float: rgba(0, 0, 0, 0.08) 0 6px 20px 0;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+  }
+
+  ::selection {
+    background: var(--color-primary-disabled);
+    color: var(--color-fg);
+  }
+
+  /* Focus: a plain ink outline, no glow */
+  :focus-visible {
+    outline: 2px solid var(--color-fg);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-surface-3) 0%, #e8e8e8 50%, var(--color-surface-3) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Motion — CSS only (0 kB of JavaScript).
+   Rules: animate only transform + opacity (GPU-cheap), keep it short
+   (120–260 ms), and switch everything off for prefers-reduced-motion.
+   ───────────────────────────────────────────────────────────── */
+
+@theme {
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Dialog backdrop (Radix sets data-state="open" | "closed") */
+.overlay[data-state='open'] { animation: fade-in 180ms ease-out; }
+.overlay[data-state='closed'] { animation: fade-out 150ms ease-in; }
+
+/* Dialog panel: a bottom sheet on phones, a centred card from 640px */
+.dialog[data-state='open'] { animation: sheet-in 260ms var(--ease-out-soft); }
+.dialog[data-state='closed'] { animation: sheet-out 180ms ease-in; }
+@media (min-width: 640px) {
+  .dialog[data-state='open'] { animation: pop-in 200ms var(--ease-out-soft); }
+  .dialog[data-state='closed'] { animation: pop-out 140ms ease-in; }
+}
+
+/* Account menu: a native popover pinned under the avatar pill, top-right of the page */
+.account-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  top: 64px;
+  right: 16px;
+  transform-origin: top right;
+}
+.account-menu:popover-open { animation: menu-in 160ms var(--ease-out-soft); }
+@media (min-width: 640px) { .account-menu { right: 24px; } }
+@media (min-width: 768px) { .account-menu { top: 76px; } }
+/* line up with the 1280px content column (lg padding 40px) */
+@media (min-width: 1024px) { .account-menu { right: max(40px, calc((100vw - 80rem) / 2 + 40px)); } }
+
+/* Content that appears after loading fades up a little */
+.animate-rise { animation: rise-in 260ms var(--ease-out-soft) both; }
+
+/* Tap feedback on anything clickable that opts in (pair with a transition-* class) */
+@layer utilities {
+  .pressable:active { transform: scale(0.97); }
+}
+
+/* Page changes: a quick cross-fade via the View Transitions API.
+   Browsers without it just switch pages instantly. */
+::view-transition-old(root) { animation: fade-out 120ms ease-in both; }
+::view-transition-new(root) { animation: fade-in 180ms ease-out both; }
+/* Shared photos (card → restaurant banner) morph between pages */
+::view-transition-group(*) { animation-duration: 280ms; animation-timing-function: var(--ease-out-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
