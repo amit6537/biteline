@@ -1,22 +1,39 @@
 package com.fooddelivery.backend.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.backend.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * NotificationEventConsumer — listens for order lifecycle events and sends notifications.
+ * NotificationEventConsumer — Phase 10: turns Kafka events into notifications.
+ *
+ * CONCEPT: Async Kafka consumers
+ *   OrderService / PaymentService / DeliveryService never call notification
+ *   code. They just publish events. This class listens and reacts. If
+ *   notifications are slow or broken, ordering and paying still work.
+ *
+ * Thin on purpose: parse JSON → call NotificationService. Each listener has
+ * its own topic; all share the "notification-group" consumer group.
+ *
+ * Failure handling (from KafkaConfig): an exception here → 3 retries →
+ * message parked in "<topic>.DLT". Malformed JSON skips the retries.
+ *
+ * Ordering: events are keyed by orderId, so all events of ONE order on ONE
+ * topic land on the same partition and are processed in order.
  */
 @Component
 @Slf4j
 public class NotificationEventConsumer {
 
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
-    // Explicit constructor: completely satisfies IDE language server without Lombok processing delays
-    public NotificationEventConsumer(ObjectMapper objectMapper) {
+    public NotificationEventConsumer(ObjectMapper objectMapper, NotificationService notificationService) {
         this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
     }
 
     @KafkaListener(
@@ -24,14 +41,8 @@ public class NotificationEventConsumer {
             groupId = "notification-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderPlaced(String message) {
-        try {
-            OrderEvents.OrderPlacedEvent event = objectMapper.readValue(message, OrderEvents.OrderPlacedEvent.class);
-            log.info("[NOTIFICATION] 📦 Order placed! Sending confirmation to {}. OrderId={}, Total=₹{}",
-                    event.customerEmail(), event.orderId(), event.totalAmount());
-        } catch (Exception e) {
-            log.error("[NOTIFICATION] Error deserializing order.placed event: {}", e.getMessage());
-        }
+    public void onOrderPlaced(String message) throws JsonProcessingException {
+        notificationService.onOrderPlaced(read(message, OrderEvents.OrderPlacedEvent.class));
     }
 
     @KafkaListener(
@@ -39,14 +50,8 @@ public class NotificationEventConsumer {
             groupId = "notification-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onPaymentSuccess(String message) {
-        try {
-            OrderEvents.PaymentSuccessEvent event = objectMapper.readValue(message, OrderEvents.PaymentSuccessEvent.class);
-            log.info("[NOTIFICATION] 💳 Payment confirmed! Email={}, Amount=₹{}, TxnId={}",
-                    event.customerEmail(), event.amount(), event.transactionId());
-        } catch (Exception e) {
-            log.error("[NOTIFICATION] Error deserializing payment.success event: {}", e.getMessage());
-        }
+    public void onPaymentSuccess(String message) throws JsonProcessingException {
+        notificationService.onPaymentSuccess(read(message, OrderEvents.PaymentSuccessEvent.class));
     }
 
     @KafkaListener(
@@ -54,22 +59,8 @@ public class NotificationEventConsumer {
             groupId = "notification-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderStatusChanged(String message) {
-        try {
-            OrderEvents.OrderStatusChangedEvent event = objectMapper.readValue(message, OrderEvents.OrderStatusChangedEvent.class);
-            String notification = switch (event.newStatus()) {
-                case ACCEPTED  -> "✅ Your order has been accepted by " + event.restaurantName() + "!";
-                case PREPARING -> "👨‍🍳 " + event.restaurantName() + " is preparing your food.";
-                case READY     -> "🛵 Your order is ready! Assigning a delivery partner...";
-                case PICKED_UP -> "🚴 Your order is on the way!";
-                case DELIVERED -> "🎉 Order delivered! Enjoy your meal. Please rate your experience.";
-                case CANCELLED -> "❌ Your order has been cancelled.";
-                default        -> "Order status updated: " + event.newStatus();
-            };
-            log.info("[NOTIFICATION] {} → Email={}, OrderId={}", notification, event.customerEmail(), event.orderId());
-        } catch (Exception e) {
-            log.error("[NOTIFICATION] Error deserializing order.status.changed event: {}", e.getMessage());
-        }
+    public void onOrderStatusChanged(String message) throws JsonProcessingException {
+        notificationService.onOrderStatusChanged(read(message, OrderEvents.OrderStatusChangedEvent.class));
     }
 
     @KafkaListener(
@@ -77,13 +68,40 @@ public class NotificationEventConsumer {
             groupId = "notification-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
-    public void onOrderDelivered(String message) {
-        try {
-            OrderEvents.OrderDeliveredEvent event = objectMapper.readValue(message, OrderEvents.OrderDeliveredEvent.class);
-            log.info("[NOTIFICATION] ⭐ Delivery complete! Sending review prompt to {} for order {}",
-                    event.customerEmail(), event.orderId());
-        } catch (Exception e) {
-            log.error("[NOTIFICATION] Error deserializing order.delivered event: {}", e.getMessage());
-        }
+    public void onOrderDelivered(String message) throws JsonProcessingException {
+        notificationService.onOrderDelivered(read(message, OrderEvents.OrderDeliveredEvent.class));
+    }
+
+    @KafkaListener(
+            topics = "#{T(com.fooddelivery.backend.config.KafkaConfig).TOPIC_DELIVERY_ASSIGNED}",
+            groupId = "notification-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onDeliveryAssigned(String message) throws JsonProcessingException {
+        notificationService.onDeliveryAssigned(read(message, OrderEvents.DeliveryAssignedEvent.class));
+    }
+
+    @KafkaListener(
+            topics = "#{T(com.fooddelivery.backend.config.KafkaConfig).TOPIC_DELIVERY_DELAYED}",
+            groupId = "notification-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onDeliveryDelayed(String message) throws JsonProcessingException {
+        notificationService.onDeliveryDelayed(read(message, OrderEvents.DeliveryDelayedEvent.class));
+    }
+
+    @KafkaListener(
+            topics = "#{T(com.fooddelivery.backend.config.KafkaConfig).TOPIC_REVIEW_CREATED}",
+            groupId = "notification-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onReviewCreated(String message) throws JsonProcessingException {
+        notificationService.onReviewCreated(read(message, OrderEvents.ReviewCreatedEvent.class));
+    }
+
+    private <T> T read(String message, Class<T> type) throws JsonProcessingException {
+        T event = objectMapper.readValue(message, type);
+        log.debug("[NOTIFICATION] received {}", event);
+        return event;
     }
 }

@@ -1,7 +1,11 @@
 package com.fooddelivery.backend.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 import java.util.UUID;
 
@@ -21,6 +25,8 @@ import java.util.UUID;
  */
 @Data
 @Builder
+@NoArgsConstructor  // Jackson needs an empty constructor to read it back from Redis
+@AllArgsConstructor // @Builder needs this once @NoArgsConstructor exists
 public class RestaurantResponse {
     private UUID id;
     private UUID ownerId;
@@ -30,11 +36,13 @@ public class RestaurantResponse {
     private String imageUrl;
     private Double avgRating;
     private Integer totalReviews;
+    @Getter(onMethod_ = @JsonProperty("isOpen")) // JSON name keeps the "is" prefix (Lombok getter would drop it)
     private boolean isOpen;
     private Double deliveryRadiusKm;
     private Double minOrderAmount;
     private Double latitude;
     private Double longitude;
     private String city;
+    private Integer avgPrepMinutes; // Phase 12
 }
 
