@@ -1,9 +1,12 @@
 # ─────────────────────────────────────────────────────────────
-# Two ways to use this file:
+# Food Delivery App — shared infrastructure for backend/ and frontend/
+#
+# Two ways to use this file (run from the project root):
 #
 #   docker compose up -d
 #       → only the infrastructure (Postgres, Redis, Kafka, Mailpit).
-#         You run the app yourself from the IDE / ./mvnw spring-boot:run.
+#         You run the backend yourself (cd backend && ./mvnw spring-boot:run)
+#         and the frontend (cd frontend && npm run dev).
 #
 #   docker compose --profile app up -d --build
 #       → infrastructure + the app itself in a container (port 8080).
@@ -13,10 +16,10 @@
 services:
 
   # ─────────────────────────────────────────
-  # The Spring Boot app (built from ./Dockerfile)
+  # The Spring Boot app (built from backend/Dockerfile)
   # ─────────────────────────────────────────
   app:
-    build: .
+    build: ./backend
     image: food-delivery-backend:local
     container_name: fd-app
     profiles: ["app"]

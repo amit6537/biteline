@@ -14,8 +14,8 @@
 #   each COPY as a layer, so we copy libraries first and our code last:
 #   a code change rebuilds/pushes only the tiny last layer.
 #
-# Build:  docker build -t food-delivery-backend .
-# Run:    docker compose --profile app up -d     (see docker-compose.yml)
+# Build:  docker build -t food-delivery-backend backend     (from the project root)
+# Run:    docker compose --profile app up -d     (root docker-compose.yml)
 # ─────────────────────────────────────────────────────────────
 
 # ── Stage 1: build ───────────────────────────────────────────
