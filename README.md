@@ -1,6 +1,8 @@
-# Food Delivery Platform
+# Biteline
 
-[![CI](https://github.com/amit6537/Distributed-backend-system/actions/workflows/ci.yml/badge.svg)](https://github.com/amit6537/Distributed-backend-system/actions/workflows/ci.yml)
+**A full-stack food delivery platform**
+
+[![CI](https://github.com/amit6537/biteline/actions/workflows/ci.yml/badge.svg)](https://github.com/amit6537/biteline/actions/workflows/ci.yml)
 
 A Swiggy/Zomato-style food delivery system: a **Spring Boot backend** that coordinates
 customers, restaurants, payments and delivery riders through an order state machine and
