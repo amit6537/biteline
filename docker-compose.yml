@@ -13,6 +13,12 @@
 #         The "app" profile keeps it OFF by default so it never clashes
 #         with the app you run from your IDE on the same port.
 # ─────────────────────────────────────────────────────────────
+
+# Fixed project name: Compose otherwise names the project (and its volumes)
+# after the folder, so renaming the folder would start with an EMPTY database.
+# Keeps the existing food-delivery-backend_pgdata / _redisdata volumes.
+name: food-delivery-backend
+
 services:
 
   # ─────────────────────────────────────────
